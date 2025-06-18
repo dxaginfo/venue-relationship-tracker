@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:14-alpine
+    container_name: venue-tracker-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: venueadmin
+      POSTGRES_PASSWORD: venuepassword
+      POSTGRES_DB: venuetracker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: venue-tracker-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+  # Backend API service
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: venue-tracker-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: venueadmin
+      DB_PASSWORD: venuepassword
+      DB_NAME: venuetracker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: your_jwt_secret_key_here
+      AWS_BUCKET_NAME: venue-tracker-files
+      AWS_REGION: us-west-2
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+
+  # Frontend client service
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: venue-tracker-client
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: http://localhost:5000/api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - app-network
+
+# Persistent volumes
+volumes:
+  postgres_data:
+  redis_data:
+
+# Network configuration
+networks:
+  app-network:
+    driver: bridge
